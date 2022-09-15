@@ -1,0 +1,37 @@
+name: Build and Execute Tests
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+  pull_request:
+    branches:
+      - master
+      - develop
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v1
+      - name: Build Opal
+        run: sbt -J-Xmx20G cleanBuild
+      
+      - name: Check formatting
+        run: git diff --exit-code
+        
+      - name: Run tests
+        run: sbt -J-Xmx20G test
+
+  it-test:
+    runs-on: self-hosted
+    needs: build
+
+    if: github.event_name == 'push' || github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Run Integration Tests
+      run: sbt -J-Xmx40G cleanBuild it:test

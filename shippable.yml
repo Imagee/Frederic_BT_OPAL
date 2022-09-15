@@ -1,0 +1,32 @@
+build:
+  pre_ci_boot:
+    image_name: opalj/sbt_scala_javafx
+    image_tag: latest
+    pull: true
+
+reset_minion: true
+
+language: scala
+
+scala:
+   - 2.12.8
+
+jdk:
+  - oraclejdk8
+
+branches:
+  only:
+    - develop
+
+script:
+  - export SBT_OPTS="-XX:+CMSClassUnloadingEnabled"
+  - sbt coverage AbstractInterpretationFramework/test
+  - sbt coverageReport coverageAggregate
+
+after_script:
+  - mkdir -p shippable/codecoverage
+  - mv target/scala-2.12/coverage-report/cobertura.xml $PWD/shippable/codecoverage/
+
+notifications:
+  email:
+    - opal@st.informatik.tu-darmstadt.de

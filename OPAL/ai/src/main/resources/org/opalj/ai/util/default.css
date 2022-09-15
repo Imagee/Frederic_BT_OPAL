@@ -1,0 +1,147 @@
+body {
+	font-family: "Helvetica Neue", Helvetica;
+	font-weight: 300;
+	line-height: 1.5em;
+}
+
+h1 {
+	font-size: 1.25em;
+}
+
+table {
+	width:100%;
+	min-width: 1000px;
+	font-size: 0.9em;
+	font-weight: inherit;
+	margin-top: 1.5em;
+	border: 1px solid gray;
+}
+table li, table td, table th {
+	overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+thead {
+	font-weight: bold;
+	color: white;
+	background-color: gray;
+}
+caption {
+	font-weight: light;
+	font-size: 1.1em;
+	border: 1px solid gray;
+	padding: 0.2em;
+	margin: 0;
+	background-color: gray;
+	color : white;
+	text-align: left;
+}
+td.caption {
+	background-color: rgb(159, 162, 183);
+	color : white;
+	padding: 0.3em;	
+}
+div.annotations{
+	font-size: 0.8em;
+}
+span.unused{
+	color: #999999;
+}
+span.keyword{
+	padding-right:0.25em;
+	color:rgb(155, 5, 151);
+}
+span.operator{
+	padding-left:0.25em;
+	padding-right:0.25em;
+	font-weight:bold;
+}
+span.value{
+	color:rgb(0,0,255);
+}
+th{
+	vertical-align: top;
+}
+td{
+	vertical-align: top;
+}
+tr.not_evaluated td {
+	background-color: #FFDBDB;
+}
+tr:hover {
+	background-color: #cccccc;
+}
+td + td {
+	border-left: 1px solid #eee;
+}
+
+th {
+	min-width: 75px;
+}
+th.pc {
+	width: 75px;
+}
+th.instruction {
+	width: 20%;
+}
+th.registers, th.stack {
+	width: 27%;
+}
+
+td.stack{
+	vertical-align: bottom;
+}
+
+ul.stack{
+	list-style:none;
+	margin-left:1em;
+	padding-left:0;
+}
+
+ul.stack li{
+	border-left:1px solid #888;
+	border-bottom:1px solid #888;
+	padding:1px;
+}
+
+ol.registers{
+	list-style-position : inside;
+	margin-left:1em;
+	padding-left:0;
+}
+ol.registers li{
+	padding:1px;
+}
+
+td.pc{
+	background-color: #ffc;
+}
+
+span.method_parameters > span + span::before { 
+	content:", ";
+	color:#AA22FF;
+}
+
+.tooltip:hover > span{ 
+	display:inline; 
+	position:absolute; 
+	color:#111; 
+	border:1px solid #DCA; 
+	background:#fffAF0;
+}
+
+.tooltip > span { 
+	color:gray;
+	z-index:10;
+	display:none; 
+	padding:0.5em 0.5em; 
+	margin-top:-0.5em; 
+	margin-left:0.5em;  
+	line-height:1.5em;
+	border-radius:4px;
+	-moz-border-radius: 4px;
+	-webkit-border-radius: 4px;
+	-moz-box-shadow: 5px 5px 8px #CCC;
+	-webkit-box-shadow: 5px 5px 8px #CCC;
+	box-shadow: 5px 5px 8px #CCC;
+}

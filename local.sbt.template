@@ -1,0 +1,19 @@
+//
+// Additional configuration __settings__ specific to each developers machine.
+// Please note that you have to change scalac.options.local for changes to
+// the configuration of the scalac compiler.
+//
+// Copy this file to "local.sbt" and change all settings as appropriate.
+//
+
+// If your CPU uses hyperthreading, it is recommended to specify the
+// number of physical cores and the number of hyperthreaded cores;
+// this will spead up the overall execution.
+ThisBuild / javaOptions in  ++= Seq(
+	"-Dorg.opalj.threads.CPUBoundTasks=4", // Number of physical (not hyperthreaded) cores/CPUs
+	"-Dorg.opalj.threads.IOBoundTasks=12" // Number of (hyperthreaded) cores * 1,5
+)
+
+// You can change the JVM Heap Space using the next two lines
+// ThisBuild / javaOptions -= "-Xmx24G"
+// ThisBuild / javaOptions += "-Xmx14G" // Slightly less than available RAM
