@@ -1,7 +1,7 @@
 
 
 import org.opalj.br.analyses.{BasicReport, Project, ProjectAnalysisApplication}
-import org.opalj.tac.{AITACode, Assignment, InvokedynamicMethodCall, LazyDetachedTACAIKey, StaticFunctionCall, StringConst, TACMethodParameter, UVar, VirtualFunctionCall, VirtualMethodCall}
+import org.opalj.tac.{AITACode, Assignment, ExprStmt, LazyDetachedTACAIKey, StaticFunctionCall, StringConst, TACMethodParameter, UVar, VirtualFunctionCall, VirtualMethodCall}
 import org.opalj.value.ValueInformation
 
 import java.net.URL
@@ -10,11 +10,10 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
     override def doAnalyze(project: Project[URL], parameters: Seq[String], isInterrupted: () => Boolean): BasicReport = {
 
       val tacProvider = project.get(LazyDetachedTACAIKey)
-
-      var set : Set[String] = Set()
-
+      var allStringset : Set[String] = Set()
+      var certainStringset : Set[String] = Set()
       val methodName = "main"
-
+      val usedMethods = Seq("insertStatement", "selectStatement")
 
       for {
         cf <- project.allProjectClassFiles
@@ -23,20 +22,15 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
       } {
         val tac = tacProvider(m)
 
-        println("")
-
-        println("Print all String: ")
-        set = getAllStrings(tac)
-        set.foreach(str => println(str))
+        println("\n Print all String: ")
+        allStringset = getAllStrings(tac)
+        allStringset.foreach(str => println(str))
 
 
-        println("")
+        println("\n Print all Strings used by certain Methods: ")
+        certainStringset = getAllStringsUsedByCertainMethods(tac,usedMethods)
+        certainStringset.foreach(str => println(str))
 
-        println("Print all Strings used by certain Methods: ")
-        set = getAllStringsUsedByCertainMethods(tac,Seq("execInsert", "execSelect"))
-        set.foreach(str => println(str))
-
-        println("")
 
 
 
@@ -129,7 +123,8 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
        */
 
       BasicReport(
-        "Result of MyFirstAnalsis: \n"
+        "\nResult of MyFirstAnalsis: \n" + allStringset.mkString(" all found Strings: \n","\n","\n \n")
+          + certainStringset.mkString(" Strings used by insertStatement, selectStatement: \n","\n","\n")
         )
     }
 
@@ -147,9 +142,6 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
       }
     })
 
-
-
-
     return set
   }
 
@@ -157,10 +149,9 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
   def getAllStringsUsedByCertainMethods(tac: AITACode[TACMethodParameter, ValueInformation], methods: Seq[String]): Set[String] ={
     var set : Set[String] = Set()
 
-
     tac.stmts.foreach(stmt => {
       stmt match {
-        case VirtualMethodCall(pc, declaringClass, isInterface, "execInsert", descriptor, receiver, params) =>
+        case VirtualMethodCall(pc, declaringClass, isInterface, "insertStatement", descriptor, receiver, params) =>
           params.foreach(p => {
             p match {
               case pv@UVar(value, defSites) =>
@@ -169,20 +160,18 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
                 if (expr.isStringConst) set += expr.asStringConst.value
 
 
-              case _ => println(methods)
+              case _ =>
             }})
 
-        case InvokedynamicMethodCall(pc, bootstrapMethod, name, descriptor, params) =>
-          println(stmt.asInvokedynamicMethodCall.bootstrapMethod.handle.value)
 
         case Assignment(pc, targetVar,
-        VirtualFunctionCall(vpc, declaringClass, isInterface, "execSelect", descriptor, receiver, params)) =>
+        VirtualFunctionCall(vpc, declaringClass, isInterface, "selectStatement", descriptor, receiver, params)) =>
           params.foreach( v => {
             v match {
               case UVar(value,defSites) =>
                 val i = defSites.iterator.next()
                 val expr = tac.stmts(i).asAssignment.expr
-                if(expr.isStringConst) println(expr.asStringConst.value)
+                if(expr.isStringConst) set += expr.asStringConst.value
               case _ =>
             }
           })
@@ -191,6 +180,16 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
         ss@ StaticFunctionCall( spc, declaringClass,isInterface, name, descriptor, params )) =>
 
 
+        case ExprStmt(pc,VirtualFunctionCall(vpc,declaringClass,isInterface,"selectStatement",descriptor,receiver,params))=>
+          params.foreach( v => {
+            v match {
+              case UVar(value,defSites) =>
+                val i = defSites.iterator.next()
+                val expr = tac.stmts(i).asAssignment.expr
+                if(expr.isStringConst) set += expr.asStringConst.value
+              case _ =>
+            }
+          })
 
         case _ =>
           }}
