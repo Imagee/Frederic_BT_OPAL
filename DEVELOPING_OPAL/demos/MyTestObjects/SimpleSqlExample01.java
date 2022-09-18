@@ -1,5 +1,7 @@
 public class SimpleSqlExample01 {
-    public void main(){
+    String field01 = "base";
+    String field02 = "home02";
+    public void main(boolean a){
 
         String insert01 = "INSERT INTO tableA (id, name) VALUES (1 , tainted );" ;
         String insert02 = "INSERT INTO tableA (id, name) VALUES (2 , Freddy );" ;
@@ -7,6 +9,10 @@ public class SimpleSqlExample01 {
 
         String randomString01 = "Dummy String 01 ";
         String randomString02 = "Random String 02";
+
+        field01 = "INSERT INTO tableA (id, name) VALUES (7 , Mr.field );" ;
+
+        field02 = "Nothing init";
 
 
         /*
@@ -18,10 +24,20 @@ public class SimpleSqlExample01 {
            execInsert(insert04);
          */
 
+        if(a){
+            insert02 = "war true";
+            field01 = "INSERT INTO tableA (id, name) VALUES (9 , Mr.field_true );" ;
+        }else {
+            insert02 = "was false";
+            field01  = "INSERT INTO tableA (id, name) VALUES (10 , Mr.field_false );" ;
+        }
+
+
 
         execInsert(insert01);
         execInsert(insert02);
         execInsert( "INSERT INTO tableA (id, name) VALUES (5 , Mr.SomeOne );");
+        execInsert(field01);
         //execInsert(insert03);
         uninportantMethod(insert03);
         uninportantMethod(randomString01);

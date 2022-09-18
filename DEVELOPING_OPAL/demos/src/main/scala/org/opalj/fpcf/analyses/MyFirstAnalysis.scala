@@ -1,42 +1,43 @@
 
 
 import org.opalj.br.analyses.{BasicReport, Project, ProjectAnalysisApplication}
-import org.opalj.tac.{AITACode, Assignment, ExprStmt, LazyDetachedTACAIKey, StaticFunctionCall, StringConst, TACMethodParameter, UVar, VirtualFunctionCall, VirtualMethodCall}
+import org.opalj.collection.immutable.IntTrieSet
+import org.opalj.tac.{AITACode, Assignment, DUVar, Expr, ExprStmt, GetField, GetStatic, LazyDetachedTACAIKey, PutField, PutStatic, StaticFunctionCall, StringConst, TACMethodParameter, UVar, VirtualFunctionCall, VirtualMethodCall}
 import org.opalj.value.ValueInformation
 
 import java.net.URL
 
 object MyFirstAnalysis extends ProjectAnalysisApplication {
+
     override def doAnalyze(project: Project[URL], parameters: Seq[String], isInterrupted: () => Boolean): BasicReport = {
 
       val tacProvider = project.get(LazyDetachedTACAIKey)
       var allStringset : Set[String] = Set()
       var certainStringset : Set[String] = Set()
-      val methodName = "main"
-      val usedMethods = Seq("insertStatement", "selectStatement")
+      val methodName = "main" //"<clinit>"
+      val usedMethods = Seq("insertStatement","selectStatement", "execSelect", "execInsert")
+
 
       for {
         cf <- project.allProjectClassFiles
         m <- cf.methods
-        if m.body.isDefined && m.name == methodName
+        if m.body.isDefined
+        if m.name == "<init>" || m.name == methodName ||m.name == "<clinit>"
       } {
+
         val tac = tacProvider(m)
+        val initMethod = cf.methods.filter(m => m.name == "<init>").head
+        val intTAC = tacProvider(initMethod)
+
+        val clinitTAC = tacProvider(cf.methods.filter(m => m.name =="<clinit>").head)
 
         println("\n Print all String: ")
-        allStringset = getAllStrings(tac)
-        allStringset.foreach(str => println(str))
+        allStringset ++= getAllStrings(tac)
+
 
 
         println("\n Print all Strings used by certain Methods: ")
-        certainStringset = getAllStringsUsedByCertainMethods(tac,usedMethods)
-        certainStringset.foreach(str => println(str))
-
-
-
-
-
-
-
+        certainStringset ++= getAllStringsUsedByCertainMethods(tac,intTAC,clinitTAC,usedMethods)
 
 
 
@@ -124,7 +125,7 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
 
       BasicReport(
         "\nResult of MyFirstAnalsis: \n" + allStringset.mkString(" all found Strings: \n","\n","\n \n")
-          + certainStringset.mkString(" Strings used by insertStatement, selectStatement: \n","\n","\n")
+          + certainStringset.mkString(" Strings used by" + usedMethods.mkString(" "," ",":") +" \n","\n","\n")
         )
     }
 
@@ -136,9 +137,139 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
     tac.stmts.foreach(stmt => {
       stmt match {
         case Assignment(pc, targetVar, StringConst(spc,value))  =>
-          set += value //println(value)
+          set += value
+
+          /*
+        case PutField( pc,declaringClass,name,declaredFieldType,objRef,UVar(value,defSites)) =>
+          val i = defSites.iterator.next()
+          val expr = tac.stmts(i).asAssignment.expr
+          if(expr.isStringConst) println("")
+           */
 
         case _ =>
+      }
+    })
+     set
+  }
+
+
+  def getAllStringsUsedByCertainMethods(tac: AITACode[TACMethodParameter, ValueInformation],init: AITACode[TACMethodParameter, ValueInformation],clinit: AITACode[TACMethodParameter, ValueInformation], methods: Seq[String]): Set[String] ={
+    var set : Set[String] = Set()
+
+    tac.stmts.foreach(stmt => {
+      stmt match {
+
+        case Assignment(pc,targetVar,VirtualFunctionCall(vpc,declaringClass,isInterface,name,descriptor,receiver,params)) =>
+          set++=searchValuebyFunctionName(methods,name, params, tac, init,clinit)
+
+        case Assignment(pc,targetVar,GetStatic(gpc,declaringClass,name,declaredFieldType)) =>
+          //searchValuebyFunctionName(methods,name,params,tac, clinit)
+          //searchStaticFiledValue(methods, name, tac, clinit)
+
+
+
+          //Für String concatenation
+        case Assignment(pc,targetVar,
+        sfc@ StaticFunctionCall( spc, declaringClass,isInterface, name, descriptor, params )) =>
+
+        case ExprStmt(pc,VirtualFunctionCall(vpc,declaringClass,isInterface,name,descriptor,receiver,params))=>
+          set++= searchValuebyFunctionName(methods, name, params, tac, init,clinit)
+
+        case VirtualMethodCall(pc, declaringClass, isInterface, name, descriptor, receiver, params) =>
+          set ++= searchValuebyFunctionName(methods, name, params, tac, init,clinit)
+
+          /*
+        case VirtualFunctionCall(pc,declaringClass,isInterface,name,descriptor,receiver,params) =>
+          set++=searchValuebyFunctionName(methods,name, params, tac, init)
+           */
+
+        case _ =>
+          }
+    })
+          return set
+  }
+
+  def searchStaticFiledValue(
+                              methods: Seq[String],
+                              name:String,
+                              tac: AITACode[TACMethodParameter, ValueInformation],
+                              init: AITACode[TACMethodParameter, ValueInformation]
+                            ):Unit = {
+
+  }
+
+  def searchValuebyFunctionName(
+          methods: Seq[String],
+          name:String,
+          params: Seq[Expr[DUVar[ValueInformation]]],
+          tac: AITACode[TACMethodParameter, ValueInformation],
+          init: AITACode[TACMethodParameter, ValueInformation],
+          clinit: AITACode[TACMethodParameter, ValueInformation]
+        ):Set[String] = {
+
+    var set : Set[String] = Set()
+    if(methods.contains(name)) {
+      params.foreach(p => {
+        p match {
+          case UVar(value, defSites) =>
+            set ++= searchValue(defSites,tac,init,clinit)
+          case _ =>
+        }
+      })
+    }
+    set
+  }
+
+
+  def searchValue(
+          defSites:IntTrieSet,
+          tac: AITACode[TACMethodParameter, ValueInformation],
+          init: AITACode[TACMethodParameter, ValueInformation],
+          clinit: AITACode[TACMethodParameter, ValueInformation]
+                 ):Set[String] = {
+    val defSiteIterator = defSites.iterator
+    var set : Set[String] = Set()
+
+    while(defSiteIterator.hasNext){
+      val i = defSiteIterator.next()
+      if(i >= 0){
+          tac.stmts(i).asAssignment.expr match {
+          case StringConst(pc,value) => set += value
+          case GetField(pc, declaringClass, name, declaredFieldType, objRef) =>
+            set++=searchFieldValue(name,tac, init,clinit)
+            set++=searchFieldValue(name,init,init,clinit)
+
+          case GetStatic(pc,declaringClass,name,declaredFieldType) =>
+            set++ searchFieldValue(name,tac, init,clinit)
+            set++ searchFieldValue(name,clinit,init,clinit)
+          case _=>
+        }
+      }else{
+        println("lad in Else")
+      }
+    }
+    set
+  }
+
+  def searchFieldValue(
+          FieldName: String,
+          tac: AITACode[TACMethodParameter, ValueInformation],
+          init: AITACode[TACMethodParameter, ValueInformation],
+          clinit: AITACode[TACMethodParameter, ValueInformation],
+           ):Set[String] =  {
+    var set : Set[String] = Set()
+
+    tac.stmts.foreach(stmt => {
+      stmt match {
+        case PutField( pc,declaringClass,name,declaredFieldType,objRef,v@ UVar(value,defSites)) =>
+          if (name == FieldName) {
+            set ++= searchValue(defSites, tac, init,clinit)
+          }
+        case PutStatic(pc,declaringClass,name,declaredFieldType,value) =>
+          if(name ==FieldName){
+            set++= searchValue(value.asVar.definedBy,tac, init,clinit)
+          }
+        case _=>
       }
     })
 
@@ -146,54 +277,4 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
   }
 
 
-  def getAllStringsUsedByCertainMethods(tac: AITACode[TACMethodParameter, ValueInformation], methods: Seq[String]): Set[String] ={
-    var set : Set[String] = Set()
-
-    tac.stmts.foreach(stmt => {
-      stmt match {
-        case VirtualMethodCall(pc, declaringClass, isInterface, "insertStatement", descriptor, receiver, params) =>
-          params.foreach(p => {
-            p match {
-              case pv@UVar(value, defSites) =>
-                val i = defSites.iterator.next()
-                val expr = tac.stmts(i).asAssignment.expr
-                if (expr.isStringConst) set += expr.asStringConst.value
-
-
-              case _ =>
-            }})
-
-
-        case Assignment(pc, targetVar,
-        VirtualFunctionCall(vpc, declaringClass, isInterface, "selectStatement", descriptor, receiver, params)) =>
-          params.foreach( v => {
-            v match {
-              case UVar(value,defSites) =>
-                val i = defSites.iterator.next()
-                val expr = tac.stmts(i).asAssignment.expr
-                if(expr.isStringConst) set += expr.asStringConst.value
-              case _ =>
-            }
-          })
-
-        case Assignment(pc,targetVar,
-        ss@ StaticFunctionCall( spc, declaringClass,isInterface, name, descriptor, params )) =>
-
-
-        case ExprStmt(pc,VirtualFunctionCall(vpc,declaringClass,isInterface,"selectStatement",descriptor,receiver,params))=>
-          params.foreach( v => {
-            v match {
-              case UVar(value,defSites) =>
-                val i = defSites.iterator.next()
-                val expr = tac.stmts(i).asAssignment.expr
-                if(expr.isStringConst) set += expr.asStringConst.value
-              case _ =>
-            }
-          })
-
-        case _ =>
-          }}
-      )
-          return set
-  }
 }
