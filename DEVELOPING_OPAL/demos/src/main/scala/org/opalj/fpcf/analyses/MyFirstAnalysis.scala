@@ -209,10 +209,12 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
     var set : Set[String] = Set()
     val word = raw"(\w+|'\w+')"
     val columnWord = raw"(\w+|'\w+'|`\w+`)"
-    val tableWord = raw"((('\w+-)|\w+.)+|$word)"
+    val tableName = raw"((('\w+-)|\w+.)+|$word)"
+    val column = raw"$columnWord( , $columnWord)*"
+    val values = raw"\( $word (, $word )*\) (, \( $word (, $word )*\) )*"
 
-    val insertPattern = raw"INSERT (IGNORE)? INTO $tableWord \( $columnWord (, $columnWord )*\) VALUES \( $word (, $word )*\) (, \( $word (, $word )*\) )*;".r
-    val selectPattern = raw"SELECT ((\w+ (, \w*))|\*)+ FROM \w+( WHERE \w+ = '[^']*')* ;".r
+    val insertPattern = raw"INSERT (IGNORE)? INTO $tableName \( $column \) VALUES $values;".r
+    val selectPattern = raw"SELECT ($column|\*)+ FROM $tableName( WHERE $word = '[^']*')* ;".r
     val updatePattern = raw"UPDATE [a-zA-Z]\w+ SET \w+ = (\w+|'\w+') (, \w+ = (\w+|'\w+'))* (WHERE .+)?;".r
 
     strings.foreach(str => {
