@@ -29,90 +29,15 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
         val initMethod = cf.methods.filter(m => m.name == "<init>").head
         val intTAC = tacProvider(initMethod)
 
-        val clinitTAC = tacProvider(cf.methods.filter(m => m.name =="<clinit>").head)
+        val clinitMethod = cf.methods.filter(m => m.name =="<clinit>").head
 
-        println("\n Print all String: ")
+        val clinitTAC = tacProvider(clinitMethod)
+
         allStringset ++= getAllStrings(tac)
-
-
-
-        println("\n Print all Strings used by certain Methods: ")
         certainStringset ++= getAllStringsUsedByCertainMethods(tac,intTAC,clinitTAC,usedMethods)
 
-
-
-        /*
         //println(m.toJava(ToTxt(tac).mkString("\n", "\n", "\n"))+"\n\n")
-        tac.stmts.foreach( st => {
-
-          st match {
-            case PutField( pc,declaringClass,name,declaredFieldType,objRef,v@ UVar(value,defSites)) =>
-              val i = defSites.iterator.next()
-              val expr = tac.stmts(i).asAssignment.expr
-              if(expr.isStringConst) println("")
-               // println(expr.asStringConst.value) //println(v.value.toString)
-
-            case Assignment(pc, targetVar, StringConst(spc,value))  =>
-              set += value //println(value)
-
-            case Assignment(pc, targetVar,
-            VirtualFunctionCall(vpc, declaringClass, isInterface, name, descriptor, receiver, params)) =>
-              params.foreach( v => {
-                v match {
-                  case UVar(value,defSites) =>
-                    val i = defSites.iterator.next()
-                    val expr = tac.stmts(i).asAssignment.expr
-                    if(expr.isStringConst) println(expr.asStringConst.value)
-                  case _ =>
-                }
-              })
-
-            case VirtualMethodCall(pc, declaringClass, isInterface, name, descriptor, receiver, params) =>
-              params.foreach(p => {
-              p match {
-                case pv@ UVar(value,defSites) =>
-                  val i = defSites.iterator.next()
-                  val expr = tac.stmts(i).asAssignment.expr
-                  if(expr.isStringConst) println(expr.asStringConst.value)
-
-                case _=>
-              }
-            })
-
-            case _ =>
-          }
-        })
       }
-
-
-
-         */
-
-        //println(set)
-      }
-
-      /*
-       Assign -> expr (StringConst?) -> value
-       Assign -> expr (VirtualFunct) ->
-
-       Ziel:
-       taint
-       tainted
-
-
-       dataflow:
-       Virtmeth -> name -> "sink"?
-        -> params -> 0 - n -> defSites -> i - n
-
-        for(i in n){
-          stmt(i) -> Assisgn? -> expr(StringCont) -> value
-                              -> expr(VirtFunk)
-        }
-
-
-       */
-
-
 
       /*
       Ziel 1: alle String ermitteln
@@ -125,7 +50,7 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
 
       BasicReport(
         "\nResult of MyFirstAnalsis: \n" + allStringset.mkString(" all found Strings: \n","\n","\n \n")
-          + certainStringset.mkString(" Strings used by" + usedMethods.mkString(" "," ",":") +" \n","\n","\n")
+          + certainStringset.mkString(" Strings used by" + usedMethods.mkString(" ",", ",":") +" \n","\n","\n")
         )
     }
 
@@ -240,8 +165,8 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
             set++=searchFieldValue(name,init,init,clinit)
 
           case GetStatic(pc,declaringClass,name,declaredFieldType) =>
-            set++ searchFieldValue(name,tac, init,clinit)
-            set++ searchFieldValue(name,clinit,init,clinit)
+            set++= searchFieldValue(name,tac, init,clinit)
+            set++= searchFieldValue(name,clinit,init,clinit)
           case _=>
         }
       }else{
@@ -261,14 +186,12 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
 
     tac.stmts.foreach(stmt => {
       stmt match {
-        case PutField( pc,declaringClass,name,declaredFieldType,objRef,v@ UVar(value,defSites)) =>
-          if (name == FieldName) {
+        case PutField( pc,declaringClass,name,declaredFieldType,objRef,v@ UVar(value,defSites)) if (name == FieldName) =>
             set ++= searchValue(defSites, tac, init,clinit)
-          }
-        case PutStatic(pc,declaringClass,name,declaredFieldType,value) =>
-          if(name ==FieldName){
+
+        case PutStatic(pc,declaringClass,name,declaredFieldType,value) if (name == FieldName )=>
             set++= searchValue(value.asVar.definedBy,tac, init,clinit)
-          }
+
         case _=>
       }
     })
@@ -277,4 +200,31 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
   }
 
 
+  def doAnalyseSQlstmts():String = {
+
+    ""
+  }
+
+  def filterSQLString(strings:Set[String]):Set[String] = {
+    var set : Set[String] = Set()
+    val word = raw"(\w+|'\w+')"
+
+    val insertCommand = raw"INSERT (IGNORE)? INTO ((('\w+-)|\w+.)+|$word) \( $word (, $word )*\) VALUES \( $word (, $word )*\) (, \( $word (, $word )*\) )*;".r
+    val selectCommand = raw"SELECT ((\w+ (, \w*))|\*)+ FROM \w+( WHERE \w+ = '[^']*')* ;".r
+    val updateCommand = raw"UPDATE [a-zA-Z]\w+ SET \w+ = (\w+|'\w+') (, \w+ = (\w+|'\w+'))* (WHERE .+)?;".r
+
+    strings.foreach(str => {
+
+      str match {
+        case i@ insertCommand(_*) => set += i
+        case s@ selectCommand(_*) => set += s
+        case u@ updateCommand(_*) => set += u
+        case _ =>
+      }
+    })
+
+    set
+  }
+
 }
+
