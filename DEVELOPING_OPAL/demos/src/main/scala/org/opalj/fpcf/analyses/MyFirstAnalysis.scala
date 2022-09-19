@@ -208,17 +208,19 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
   def filterSQLString(strings:Set[String]):Set[String] = {
     var set : Set[String] = Set()
     val word = raw"(\w+|'\w+')"
+    val columnWord = raw"(\w+|'\w+'|`\w+`)"
+    val tableWord = raw"((('\w+-)|\w+.)+|$word)"
 
-    val insertCommand = raw"INSERT (IGNORE)? INTO ((('\w+-)|\w+.)+|$word) \( $word (, $word )*\) VALUES \( $word (, $word )*\) (, \( $word (, $word )*\) )*;".r
-    val selectCommand = raw"SELECT ((\w+ (, \w*))|\*)+ FROM \w+( WHERE \w+ = '[^']*')* ;".r
-    val updateCommand = raw"UPDATE [a-zA-Z]\w+ SET \w+ = (\w+|'\w+') (, \w+ = (\w+|'\w+'))* (WHERE .+)?;".r
+    val insertPattern = raw"INSERT (IGNORE)? INTO $tableWord \( $columnWord (, $columnWord )*\) VALUES \( $word (, $word )*\) (, \( $word (, $word )*\) )*;".r
+    val selectPattern = raw"SELECT ((\w+ (, \w*))|\*)+ FROM \w+( WHERE \w+ = '[^']*')* ;".r
+    val updatePattern = raw"UPDATE [a-zA-Z]\w+ SET \w+ = (\w+|'\w+') (, \w+ = (\w+|'\w+'))* (WHERE .+)?;".r
 
     strings.foreach(str => {
 
       str match {
-        case i@ insertCommand(_*) => set += i
-        case s@ selectCommand(_*) => set += s
-        case u@ updateCommand(_*) => set += u
+        case i@ insertPattern(_*) => set += i
+        case s@ selectPattern(_*) => set += s
+        case u@ updatePattern(_*) => set += u
         case _ =>
       }
     })
