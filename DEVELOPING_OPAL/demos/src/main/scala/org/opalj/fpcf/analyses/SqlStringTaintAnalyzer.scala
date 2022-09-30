@@ -11,10 +11,10 @@ object SqlStringTaintAnalyzer{
     val selectPatter = raw"(SELECT).*".r
 
     normalizedString match {
-      case  i @ insertPatter(_*) => analyzeInsertStatement(i)._2
-      case  u @ updatePatter(_*) => analyzeUpdateStatment(u)._2
-      case  s @ selectPatter(_*) => analyzeSelectStatment(s)._2
-      case _ => ""
+      case  i @ insertPatter(_*) => analyzeInsertStatement(i)._1
+      case  u @ updatePatter(_*) => analyzeUpdateStatment(u)._1
+      case  s @ selectPatter(_*) => analyzeSelectStatment(s)._1
+      case _ => false
     }
   }
 

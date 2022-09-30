@@ -45,7 +45,7 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
         //val clinitTAC = tacProvider(clinitMethod)
         _clinitTAC = Some(tacProvider(clinitMethod))
 
-        taintAnalyze(_tac.get,Seq("source"),Seq("InsertexecStmt","PassM"))
+        taintAnalyze(_tac.get,Seq("source"),Seq("executeUpdate","executeQuery"),Seq("sink"))
 
         //allStringset ++= getAllStrings(_tac.get)
         //certainStringset ++= getAllStringsUsedByCertainMethods(_tac.get,initTAC,clinitTAC,usedMethods)
@@ -203,8 +203,11 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
     ""
   }
 
-  def taintAnalyze(tac: TACTYPE,sourceNames:Seq[String],sinkNames:Seq[String]): Unit ={
+  def taintAnalyze(tac: TACTYPE, sourceNames:Seq[String], toInspectMethods:Seq[String],sinkMethod:Seq[String] ): Unit ={
 
+    val sqlStringTaintAnalyzer = SqlStringTaintAnalyzer
+    val sqlmemory = TaintMemorySQL
+    sqlmemory.taint("TAINTED")
 
 
     for((stmt,index) <- tac.stmts.zipWithIndex){
@@ -226,35 +229,92 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
               }
             }
           }
-          if(sinkNames.contains(name)){
+          if(toInspectMethods.contains(name)){
             for(param <- params){
               if(param.isVar){
                 val definedBy = param.asVar.definedBy.head
-                if(_tainted.contains(definedBy)){
-                  val value = getValue(definedBy)
+                val value = getValue(definedBy)
                   println((index,definedBy,value))
                   //analye sql
-                }
+                  if(name == "executeQuery" && sqlStringTaintAnalyzer.doAnalyze(value) ){
+                    _tainted += index
+                  }
               }
             }
           }
 
         case VirtualMethodCall(pc,declaringClass,isInterface,name,descriptor,receiver,params) =>
-          if(sinkNames.contains(name)){
+          if(toInspectMethods.contains(name)){
             for(param <- params){
               if(param.isVar){
                 val definedBy = param.asVar.definedBy.head
                 if(_tainted.contains(definedBy)){
                   val value = getValue(definedBy)
                   println((index,definedBy,value))
-                  //analye sql
+                  val er = sqlStringTaintAnalyzer.doAnalyze(value)
+                  println(er)
+
+                  //analyse sql
 
                 }
               }
             }
-          }else{
+          }
+          if(sinkMethod.contains(name)){
+            params.foreach(p => {
+              if(p.isVar){
+                val definedBy = p.asVar.definedBy.head
+                if(_tainted.contains(definedBy)){
+                  println(index)
+                }
+              }
+            } )
 
           }
+
+
+        case PutStatic(pc,declaringClass,name,declaredFieldType,UVar(value, defSites)) =>
+          if(_tainted.contains(defSites.head)){
+            _tainted += index
+          }
+
+        case PutField(pc,declaringClass,name,declaredFieldType,objRef,UVar(value, defSites)) =>
+          if(_tainted.contains(defSites.head)){
+            _tainted += index
+          }
+
+        case Assignment(pc,targetVar,GetStatic(gtpc,declaringClass,gname,declaredFieldType)) =>
+          var i = index;
+          while (i >= 0 ){
+            _tac.get.stmts(i) match {
+              case PutStatic(pc,declaringClass,pname,declaredFieldType,UVar(value, defSites)) =>
+                if(gname == pname){
+                  if(_tainted.contains(defSites.head)){
+                    _tainted += index
+                  }
+                  i = -1
+                }
+              case _=>
+            }
+            i -= 1
+          }
+
+        case Assignment(pc,targetVar,GetField(gtpc,declaringClass,gname,declaredFieldType,objRef)) =>
+          var i = index;
+          while (i >= 0 ){
+            _tac.get.stmts(i) match {
+              case PutField(pc,declaringClass,pname,declaredFieldType,objRef,UVar(value, defSites)) =>
+                if(gname == pname){
+                  if(_tainted.contains(defSites.head)){
+                    _tainted += index
+                  }
+                  i = -1
+                }
+              case _=>
+            }
+            i -= 1
+          }
+
 
         case _=>
       }
@@ -262,6 +322,7 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
 
 
   }
+
 
   def getValue(index:Int): String = {
     var retValue =""
@@ -286,6 +347,35 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
 
       case Assignment(pc,targetVar,StringConst(spc,value)) =>
         retValue += value
+
+      case Assignment(pc,targetVar,GetStatic(gtpc,declaringClass,gname,declaredFieldType)) =>
+        var i = index;
+        while (i >= 0 ){
+          _tac.get.stmts(i) match {
+            case PutStatic(pc,declaringClass,pname,declaredFieldType,UVar(value, vdefSites)) =>
+              if(gname == pname){
+                retValue += getValue(vdefSites.head)
+                i = -1
+              }
+            case _=>
+          }
+          i -= 1
+        }
+
+      case Assignment(pc,targetVar,GetField(gfpc,declaringClass,gname,declaredFieldType,objRef)) =>
+        var i = index;
+        while (i >= 0 ){
+          _tac.get.stmts(i) match {
+            case PutField(pc,declaringClass,pname,declaredFieldType,objRef,UVar(value, vdefSites)) =>
+              if(gname == pname){
+                retValue += getValue(vdefSites.head)
+                i = -1
+              }
+            case _=>
+          }
+          i -= 1
+        }
+
 
       case _=>
     }
