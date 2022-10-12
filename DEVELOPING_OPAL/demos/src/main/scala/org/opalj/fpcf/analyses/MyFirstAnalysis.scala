@@ -10,10 +10,10 @@ import java.net.URL
 
 object MyFirstAnalysis extends ProjectAnalysisApplication {
 
-  type TACTYPE = AITACode[TACMethodParameter,ValueInformation]
-  var _tac:Option[TACTYPE] = None
-  var _initTAC:Option[TACTYPE] = None
-  var _clinitTAC:Option[TACTYPE] = None
+  type TACAICode = AITACode[TACMethodParameter,ValueInformation]
+  var _tac:Option[TACAICode] = None
+  var _initTAC:Option[TACAICode] = None
+  var _clinitTAC:Option[TACAICode] = None
   var _tainted: Set[Int] = Set()
 
     override def doAnalyze(project: Project[URL], parameters: Seq[String], isInterrupted: () => Boolean): BasicReport = {
@@ -45,7 +45,15 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
         //val clinitTAC = tacProvider(clinitMethod)
         _clinitTAC = Some(tacProvider(clinitMethod))
 
-        taintAnalyze(_tac.get,Seq("source"),Seq("executeUpdate","executeQuery"),Seq("sink"))
+        val result = taintAnalyze(_tac.get,Seq("source"),Seq("executeUpdate","executeQuery"),Seq("sink"))
+
+        for((pc,valueIndex,value) <- result ){
+          println((pc,valueIndex,value))
+
+          println(m.body.get.lineNumber(pc))
+          println("Variable in Zeile: "+ m.body.get.lineNumber(pc).get +" wurde als getainted markiert" )
+
+        }
 
         //allStringset ++= getAllStrings(_tac.get)
         //certainStringset ++= getAllStringsUsedByCertainMethods(_tac.get,initTAC,clinitTAC,usedMethods)
@@ -73,7 +81,7 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
 
 
 
-  def getAllStrings(tac: TACTYPE): Set[String] ={
+  def getAllStrings(tac: TACAICode): Set[String] ={
     var set: Set[String] = Set()
 
     tac.stmts.foreach(stmt => {
@@ -95,7 +103,7 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
   }
 
 
-  def getAllStringsUsedByCertainMethods(tac: TACTYPE,init: TACTYPE,clinit: TACTYPE, methods: Seq[String]): Set[String] ={
+  def getAllStringsUsedByCertainMethods(tac: TACAICode, init: TACAICode, clinit: TACAICode, methods: Seq[String]): Set[String] ={
     var set : Set[String] = Set()
 
     tac.stmts.foreach(stmt => {
@@ -131,13 +139,13 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
           return set
   }
 
-  def searchStaticFiledValue(methods: Seq[String], name:String, tac: TACTYPE, init: TACTYPE):Unit = {
+  def searchStaticFiledValue(methods: Seq[String], name:String, tac: TACAICode, init: TACAICode):Unit = {
 
   }
 
 
   def searchValuebyFunctionName(methods: Seq[String], name:String, params: Seq[Expr[DUVar[ValueInformation]]],
-                                tac: TACTYPE, init: TACTYPE, clinit: TACTYPE):Set[String] = {
+                                tac: TACAICode, init: TACAICode, clinit: TACAICode):Set[String] = {
     var set : Set[String] = Set()
     if(methods.contains(name)) {
       params.foreach(p => {
@@ -151,7 +159,7 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
     set
   }
 
-  def searchValue(defSites:IntTrieSet, tac: TACTYPE):Set[String] = {
+  def searchValue(defSites:IntTrieSet, tac: TACAICode):Set[String] = {
     val defSiteIterator = defSites.iterator
     var set : Set[String] = Set()
 
@@ -176,7 +184,7 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
     set
   }
 
-  def searchFieldValue(FieldName: String, tac: TACTYPE, init: TACTYPE, clinit: TACTYPE):Set[String] =  {
+  def searchFieldValue(FieldName: String, tac: TACAICode, init: TACAICode, clinit: TACAICode):Set[String] =  {
     var set : Set[String] = Set()
 
     tac.stmts.foreach(stmt => {
@@ -203,11 +211,12 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
     ""
   }
 
-  def taintAnalyze(tac: TACTYPE, sourceNames:Seq[String], toInspectMethods:Seq[String],sinkMethod:Seq[String] ): Unit ={
+  def taintAnalyze(tac: TACAICode, sourceNames:Seq[String], toInspectMethods:Seq[String], sinkMethod:Seq[String] ): Set[(Int, Int, String)]={
 
     val sqlStringTaintAnalyzer = SqlStringTaintAnalyzer
     val sqlmemory = TaintMemorySQL
     sqlmemory.taint("TAINTED")
+    var result: Set[(Int,Int,String)] = Set()
 
 
     for((stmt,index) <- tac.stmts.zipWithIndex){
@@ -234,10 +243,15 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
               if(param.isVar){
                 val definedBy = param.asVar.definedBy.head
                 val value = getValue(definedBy)
-                  println((index,definedBy,value))
+
                   //analye sql
-                  if(name == "executeQuery" && sqlStringTaintAnalyzer.doAnalyze(value) ){
+                val sql = sqlStringTaintAnalyzer.doAnalyze(value)
+
+                if(name == "executeQuery" && sql ){
                     _tainted += index
+                  result += ((pc,definedBy,value))
+                  //println((index,definedBy,value))
+                  //println(sql)
                   }
               }
             }
@@ -251,21 +265,23 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
                 if(_tainted.contains(definedBy)){
                   val value = getValue(definedBy)
                   println((index,definedBy,value))
+
+                  //analyse sql
                   val er = sqlStringTaintAnalyzer.doAnalyze(value)
                   println(er)
 
-                  //analyse sql
 
                 }
               }
             }
           }
           if(sinkMethod.contains(name)){
+
             params.foreach(p => {
               if(p.isVar){
                 val definedBy = p.asVar.definedBy.head
                 if(_tainted.contains(definedBy)){
-                  println(index)
+                  //println(index)// sink index
                 }
               }
             } )
@@ -319,6 +335,7 @@ object MyFirstAnalysis extends ProjectAnalysisApplication {
         case _=>
       }
     }
+    result
 
 
   }
